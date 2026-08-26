@@ -1,3 +1,17 @@
 package dev.rodrigosambade.philosophers;
-import org.junit.jupiter.api.Test;import static org.junit.jupiter.api.Assertions.*;
-class DiningPhilosophersTest{@Test void everyoneEatsWithoutDeadlock()throws Exception{assertArrayEquals(new int[]{50,50,50,50,50},new DiningPhilosophers(5).dine(50));}}
+
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
+class DiningPhilosophersTest {
+
+    @Test
+    void everyoneEatsWithoutDeadlock() throws InterruptedException {
+        DiningPhilosophers simulation = new DiningPhilosophers(5);
+
+        int[] meals = simulation.dine(50);
+
+        assertArrayEquals(new int[]{50, 50, 50, 50, 50}, meals);
+    }
+}

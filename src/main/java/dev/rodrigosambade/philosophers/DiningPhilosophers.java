@@ -1,7 +1,114 @@
 package dev.rodrigosambade.philosophers;
-import java.util.*;import java.util.concurrent.*;import java.util.concurrent.atomic.AtomicInteger;import java.util.concurrent.locks.*;
-public final class DiningPhilosophers{
- private final ReentrantLock[]forks;public DiningPhilosophers(int n){if(n<2)throw new IllegalArgumentException();forks=new ReentrantLock[n];for(int i=0;i<n;i++)forks[i]=new ReentrantLock(true);}
- public int[]dine(int mealsPerPhilosopher)throws InterruptedException{if(mealsPerPhilosopher<0)throw new IllegalArgumentException();AtomicInteger[]counts=new AtomicInteger[forks.length];Arrays.setAll(counts,i->new AtomicInteger());try(var ex=Executors.newFixedThreadPool(forks.length)){List<Future<?>>fs=new ArrayList<>();for(int p=0;p<forks.length;p++){int id=p;fs.add(ex.submit(()->{int left=id,right=(id+1)%forks.length,first=Math.min(left,right),second=Math.max(left,right);for(int m=0;m<mealsPerPhilosopher;m++){forks[first].lock();try{forks[second].lock();try{counts[id].incrementAndGet();}finally{forks[second].unlock();}}finally{forks[first].unlock();}Thread.yield();}}));}for(Future<?>f:fs)try{f.get();}catch(ExecutionException e){throw new IllegalStateException(e.getCause());}}return Arrays.stream(counts).mapToInt(AtomicInteger::get).toArray();}
- public static void main(String[]a)throws Exception{System.out.println(Arrays.toString(new DiningPhilosophers(5).dine(100)));}
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
+
+public final class DiningPhilosophers {
+
+    private final ReentrantLock[] forks;
+
+    public DiningPhilosophers(int philosopherCount) {
+        if (philosopherCount < 2) {
+            throw new IllegalArgumentException("At least two philosophers are required");
+        }
+
+        forks = new ReentrantLock[philosopherCount];
+        for (int index = 0; index < philosopherCount; index++) {
+            forks[index] = new ReentrantLock(true);
+        }
+    }
+
+    public int[] dine(int mealsPerPhilosopher) throws InterruptedException {
+        if (mealsPerPhilosopher < 0) {
+            throw new IllegalArgumentException("mealsPerPhilosopher must not be negative");
+        }
+
+        AtomicInteger[] mealCounts = createMealCounters();
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(forks.length)) {
+            List<Future<?>> tasks = new ArrayList<>(forks.length);
+
+            for (int philosopher = 0; philosopher < forks.length; philosopher++) {
+                int philosopherId = philosopher;
+                tasks.add(executor.submit(
+                        () -> eatMeals(philosopherId, mealsPerPhilosopher, mealCounts)));
+            }
+
+            waitForAll(tasks);
+        }
+
+        return Arrays.stream(mealCounts)
+                .mapToInt(AtomicInteger::get)
+                .toArray();
+    }
+
+    private AtomicInteger[] createMealCounters() {
+        AtomicInteger[] counters = new AtomicInteger[forks.length];
+        Arrays.setAll(counters, ignored -> new AtomicInteger());
+        return counters;
+    }
+
+    private void eatMeals(
+            int philosopherId,
+            int meals,
+            AtomicInteger[] mealCounts) {
+        ForkOrder order = forkOrderFor(philosopherId);
+
+        for (int meal = 0; meal < meals; meal++) {
+            eatOnce(order, mealCounts[philosopherId]);
+            Thread.yield();
+        }
+    }
+
+    private void eatOnce(ForkOrder order, AtomicInteger mealCount) {
+        ReentrantLock firstFork = forks[order.first()];
+        ReentrantLock secondFork = forks[order.second()];
+
+        firstFork.lock();
+        try {
+            secondFork.lock();
+            try {
+                mealCount.incrementAndGet();
+            } finally {
+                secondFork.unlock();
+            }
+        } finally {
+            firstFork.unlock();
+        }
+    }
+
+    private ForkOrder forkOrderFor(int philosopherId) {
+        int leftFork = philosopherId;
+        int rightFork = (philosopherId + 1) % forks.length;
+
+        return new ForkOrder(
+                Math.min(leftFork, rightFork),
+                Math.max(leftFork, rightFork));
+    }
+
+    private static void waitForAll(List<Future<?>> tasks) throws InterruptedException {
+        for (Future<?> task : tasks) {
+            try {
+                task.get();
+            } catch (ExecutionException exception) {
+                throw new IllegalStateException("Philosopher task failed", exception.getCause());
+            }
+        }
+    }
+
+    public static void main(String[] args) throws InterruptedException {
+        DiningPhilosophers simulation = new DiningPhilosophers(5);
+        int[] result = simulation.dine(100);
+        System.out.println(Arrays.toString(result));
+    }
+
+    private record ForkOrder(int first, int second) {
+    }
 }
